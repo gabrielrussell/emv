@@ -19,7 +19,7 @@ typedef struct {
     char *new_name;
 } rename_entry;
 
-static int compare_strings(const void *a, const void *b) {
+static int compare_file_entry(const void *a, const void *b) {
     return strcmp(((file_entry*)a)->name, ((file_entry*)b)->name);
 }
 
@@ -87,7 +87,7 @@ char *read_directory(const char *path, file_entry **files, int *count) {
     }
     
     closedir(dir);
-    qsort(*files, *count, sizeof(file_entry), compare_strings);
+    qsort(*files, *count, sizeof(file_entry), compare_file_entry);
     return NULL;
 }
 
