@@ -10,6 +10,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#define ERROR_BUFFER_SIZE 4096
+
 typedef struct {
   char *name;
 } file_entry;
@@ -38,7 +40,7 @@ void free_rename_entries(rename_entry *renames, int count) {
   free(renames);
 }
 
-char *read_directory(const char *path, file_entry **files, int *count) {
+char *read_directory(char *error_buffer, const char *path, file_entry **files, int *count) {
   DIR *dir = NULL;
   struct dirent *entry;
   int capacity = 16;
@@ -49,34 +51,41 @@ char *read_directory(const char *path, file_entry **files, int *count) {
 
   *files = malloc(capacity * sizeof(file_entry));
   if (!*files) {
-    error_string = strdup("failed to allocate memory for file list");
+    error_string = "failed to allocate memory for file list";
     goto cleanup;
   }
 
   dir = opendir(path);
   if (!dir) {
-    error_string = strdup("failed to open directory");
+    snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to open directory %s: %s", path, strerror(errno));
+    error_string = error_buffer;
     goto cleanup;
   }
 
-  while ((entry = readdir(dir)) != NULL) {
+  while (errno = 0, (entry = readdir(dir)) != NULL) {
     if (entry->d_name[0] != '.' && strchr(entry->d_name, '\n') == NULL) {
       if (*count >= capacity) {
         capacity *= 2;
         file_entry *new_files = realloc(*files, capacity * sizeof(file_entry));
         if (!new_files) {
-          error_string = strdup("failed to reallocate memory for file list");
+          error_string = "failed to reallocate memory for file list";
           goto cleanup;
         }
         *files = new_files;
       }
       (*files)[*count].name = strdup(entry->d_name);
       if (!(*files)[*count].name) {
-        error_string = strdup("failed to allocate memory for filename");
+        error_string = "failed to allocate memory for filename";
         goto cleanup;
       }
       (*count)++;
     }
+  }
+
+  if (errno != 0) {
+    snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to read directory %s: %s", path, strerror(errno));
+    error_string = error_buffer;
+    goto cleanup;
   }
 
   qsort(*files, *count, sizeof(file_entry), compare_file_entry);
@@ -96,26 +105,28 @@ cleanup:
   return error_string;
 }
 
-char *create_temp_file(file_entry *files, int count, char **temp_path) {
+char *create_temp_file(char *error_buffer, file_entry *files, int count, char **temp_path) {
   int fd = -1;
   FILE *fp = NULL;
   char *error_string = NULL;
 
   *temp_path = strdup("/tmp/emv_XXXXXX");
   if (!*temp_path) {
-    error_string = strdup("failed to allocate memory for temp path");
+    error_string = "failed to allocate memory for temp path";
     goto cleanup;
   }
   
   fd = mkstemp(*temp_path);
   if (fd == -1) {
-    error_string = strdup("failed to create temporary file");
+    snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to create temporary file %s: %s", *temp_path, strerror(errno));
+    error_string = error_buffer;
     goto cleanup;
   }
 
   fp = fdopen(fd, "w");
   if (!fp) {
-    error_string = strdup("failed to open temporary file for writing");
+    snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to open temporary file %s for writing: %s", *temp_path, strerror(errno));
+    error_string = error_buffer;
     goto cleanup;
   }
 
@@ -138,18 +149,22 @@ cleanup:
   return error_string;
 }
 
-char *invoke_editor(const char *temp_path) {
+char *invoke_editor(char *error_buffer, const char *temp_path) {
   char *editor = getenv("EDITOR");
   pid_t pid;
   int status;
+  char *error_string = NULL;
 
   if (!editor || strlen(editor) == 0) {
-    return strdup("no EDITOR environment variable set");
+    error_string = "no EDITOR environment variable set";
+    goto cleanup;
   }
 
   pid = fork();
   if (pid == -1) {
-    return strdup("failed to fork process for editor");
+    snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to fork process for editor: %s", strerror(errno));
+    error_string = error_buffer;
+    goto cleanup;
   }
 
   if (pid == 0) {
@@ -157,15 +172,29 @@ char *invoke_editor(const char *temp_path) {
     exit(1);
   }
 
-  waitpid(pid, &status, 0);
-  if (status != 0) {
-    return strdup("editor exited with non-zero status");
+  if (waitpid(pid, &status, 0) == -1) {
+    snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to wait for editor process: %s", strerror(errno));
+    error_string = error_buffer;
+    goto cleanup;
+  }
+  
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+    if (WIFEXITED(status)) {
+      snprintf(error_buffer, ERROR_BUFFER_SIZE, "editor exited with status %d", WEXITSTATUS(status));
+    } else if (WIFSIGNALED(status)) {
+      snprintf(error_buffer, ERROR_BUFFER_SIZE, "editor terminated by signal %d", WTERMSIG(status));
+    } else {
+      snprintf(error_buffer, ERROR_BUFFER_SIZE, "editor exited abnormally");
+    }
+    error_string = error_buffer;
+    goto cleanup;
   }
 
-  return NULL;
+cleanup:
+  return error_string;
 }
 
-char *read_edited_files(const char *temp_path, file_entry **new_files,
+char *read_edited_files(char *error_buffer, const char *temp_path, file_entry **new_files,
                         int *count) {
   FILE *fp = NULL;
   char *line = NULL;
@@ -179,13 +208,14 @@ char *read_edited_files(const char *temp_path, file_entry **new_files,
 
   *new_files = malloc(capacity * sizeof(file_entry));
   if (!*new_files) {
-    error_string = strdup("failed to allocate memory for edited file list");
+    error_string = "failed to allocate memory for edited file list";
     goto cleanup;
   }
 
   fp = fopen(temp_path, "r");
   if (!fp) {
-    error_string = strdup("failed to reopen temporary file for reading");
+    snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to reopen temporary file %s for reading: %s", temp_path, strerror(errno));
+    error_string = error_buffer;
     goto cleanup;
   }
 
@@ -200,19 +230,24 @@ char *read_edited_files(const char *temp_path, file_entry **new_files,
         file_entry *new_entries =
             realloc(*new_files, capacity * sizeof(file_entry));
         if (!new_entries) {
-          error_string =
-              strdup("failed to reallocate memory for edited file list");
+          error_string = "failed to reallocate memory for edited file list";
           goto cleanup;
         }
         *new_files = new_entries;
       }
       (*new_files)[*count].name = strdup(line);
       if (!(*new_files)[*count].name) {
-        error_string = strdup("failed to allocate memory for edited filename");
+        error_string = "failed to allocate memory for edited filename";
         goto cleanup;
       }
       (*count)++;
     }
+  }
+
+  if (ferror(fp)) {
+    snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to read from temporary file %s: %s", temp_path, strerror(errno));
+    error_string = error_buffer;
+    goto cleanup;
   }
 
 cleanup:
@@ -233,7 +268,7 @@ cleanup:
   return error_string;
 }
 
-char *analyze_renames(file_entry *old_files, file_entry *new_files, int count,
+char *analyze_renames(char *error_buffer __attribute__((unused)), file_entry *old_files, file_entry *new_files, int count,
                       rename_entry **renames, int *rename_count, int *tricky) {
   int *orig_count = calloc(count, sizeof(int));
   int *dest_count = calloc(count, sizeof(int));
@@ -243,7 +278,7 @@ char *analyze_renames(file_entry *old_files, file_entry *new_files, int count,
 
   *renames = malloc(capacity * sizeof(rename_entry));
   if (!orig_count || !dest_count || !unchanged || !*renames) {
-    error_string = strdup("failed to allocate memory for rename analysis");
+    error_string = "failed to allocate memory for rename analysis";
     goto cleanup;
   }
 
@@ -256,7 +291,7 @@ char *analyze_renames(file_entry *old_files, file_entry *new_files, int count,
       (*renames)[*rename_count].new_name = strdup(new_files[i].name);
       if (!(*renames)[*rename_count].old_name ||
           !(*renames)[*rename_count].new_name) {
-        error_string = strdup("failed to allocate memory for rename entry");
+        error_string = "failed to allocate memory for rename entry";
         goto cleanup;
       }
       (*rename_count)++;
@@ -277,8 +312,7 @@ char *analyze_renames(file_entry *old_files, file_entry *new_files, int count,
     for (int i = 0; i < *rename_count && !error_string; i++) {
       for (int j = i + 1; j < *rename_count; j++) {
         if (strcmp((*renames)[i].new_name, (*renames)[j].new_name) == 0) {
-          error_string =
-              strdup("multiple files would be renamed to the same name");
+          error_string = "multiple files would be renamed to the same name";
           goto cleanup;
         }
       }
@@ -289,8 +323,7 @@ char *analyze_renames(file_entry *old_files, file_entry *new_files, int count,
       for (int j = 0; j < *rename_count && !error_string; j++) {
         if (strcmp((*renames)[j].new_name, old_files[i].name) == 0 &&
             unchanged[i]) {
-          error_string =
-              strdup("rename would overwrite an existing unchanged file");
+          error_string = "rename would overwrite an existing unchanged file";
           break;
         }
 
@@ -313,15 +346,15 @@ cleanup:
   return error_string;
 }
 
-char *perform_renames(rename_entry *renames, int rename_count, int tricky) {
+char *perform_renames(char *error_buffer, rename_entry *renames, int rename_count, int tricky) {
   char temp_dir[] = "./emv_temp_XXXXXX";
   char *error_string = NULL;
   int temp_dir_created = 0;
 
   if (tricky) {
     if (mkdtemp(temp_dir) == NULL) {
-      error_string =
-          strdup("failed to create temporary directory for tricky renames");
+      snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to create temporary directory for tricky renames: %s", strerror(errno));
+      error_string = error_buffer;
       goto cleanup;
     }
     temp_dir_created = 1;
@@ -330,13 +363,14 @@ char *perform_renames(rename_entry *renames, int rename_count, int tricky) {
       char *temp_path;
       asprintf(&temp_path, "%s/%s", temp_dir, renames[i].old_name);
       if (!temp_path) {
-        error_string = strdup("failed to allocate memory for temporary path");
+        error_string = "failed to allocate memory for temporary path";
         goto cleanup;
       }
 
       if (rename(renames[i].old_name, temp_path) != 0) {
-        asprintf(&error_string, "failed to move %s to temporary location: %s",
+        snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to move %s to temporary location: %s",
                  renames[i].old_name, strerror(errno));
+        error_string = error_buffer;
         free(temp_path);
         goto cleanup;
       }
@@ -348,8 +382,9 @@ char *perform_renames(rename_entry *renames, int rename_count, int tricky) {
 
   for (int i = 0; i < rename_count; i++) {
     if (rename(renames[i].old_name, renames[i].new_name) != 0) {
-      asprintf(&error_string, "failed to rename %s to %s: %s",
+      snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to rename %s to %s: %s",
                renames[i].old_name, renames[i].new_name, strerror(errno));
+      error_string = error_buffer;
       goto cleanup;
     }
   }
@@ -357,7 +392,11 @@ char *perform_renames(rename_entry *renames, int rename_count, int tricky) {
 cleanup:
   if (temp_dir_created) {
     if (rmdir(temp_dir) != 0) {
-      error(0, errno, "failed to remove temporary directory: %s", temp_dir);
+      if (!error_string) {
+        snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to remove temporary directory %s: %s", temp_dir, strerror(errno));
+        error_string = error_buffer;
+      }
+      // If error_string is already set, we don't want to overwrite the original error
     }
   }
   return error_string;
@@ -369,49 +408,52 @@ int main(int argc, char *argv[]) {
   rename_entry *renames = NULL;
   char *temp_path = NULL;
   char *error_string = NULL;
+  char error_buffer[ERROR_BUFFER_SIZE];
   int old_count = 0, new_count = 0, rename_count = 0, tricky = 0;
   int temp_file_created = 0;
 
   if (argc > 1) {
     if (chdir(argv[1]) != 0) {
-      asprintf(&error_string, "failed to change to directory %s: %s", argv[1],
+      snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to change to directory %s: %s", argv[1],
                strerror(errno));
+      error_string = error_buffer;
       goto cleanup;
     }
   }
 
-  error_string = read_directory(".", &old_files, &old_count);
+  error_string = read_directory(error_buffer, ".", &old_files, &old_count);
   if (error_string) {
     goto cleanup;
   }
 
-  error_string = create_temp_file(old_files, old_count, &temp_path);
+  error_string = create_temp_file(error_buffer, old_files, old_count, &temp_path);
   if (error_string) {
     goto cleanup;
   }
   temp_file_created = 1;
 
-  error_string = invoke_editor(temp_path);
+  error_string = invoke_editor(error_buffer, temp_path);
   if (error_string)
     goto cleanup;
 
-  error_string = read_edited_files(temp_path, &new_files, &new_count);
+  error_string = read_edited_files(error_buffer, temp_path, &new_files, &new_count);
   if (error_string)
     goto cleanup;
 
   if (old_count != new_count) {
-    asprintf(&error_string,
+    snprintf(error_buffer, ERROR_BUFFER_SIZE,
              "file count changed: had %d files, now have %d files", old_count,
              new_count);
+    error_string = error_buffer;
     goto cleanup;
   }
 
-  error_string = analyze_renames(old_files, new_files, old_count, &renames,
+  error_string = analyze_renames(error_buffer, old_files, new_files, old_count, &renames,
                                  &rename_count, &tricky);
   if (error_string)
     goto cleanup;
 
-  error_string = perform_renames(renames, rename_count, tricky);
+  error_string = perform_renames(error_buffer, renames, rename_count, tricky);
   if (error_string)
     goto cleanup;
 
@@ -430,9 +472,7 @@ cleanup:
     free_rename_entries(renames, rename_count);
   }
   if (error_string) {
-    fprintf(stderr, "%s\n", error_string);
-    free(error_string);
-    return 1;
+    error(1,0, "%s\n", error_string);
   }
   return 0;
 }

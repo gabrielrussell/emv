@@ -35,7 +35,7 @@ When run, **emv** will:
 
 5.  Perform the rename operations to match your edited list
 
-# USAGE
+# ABORTING CHANGES
 
 If you want to bail out half way through editing the file list, you can
 do one of two things:
@@ -132,9 +132,9 @@ When you save and exit, they will be renamed accordingly.
 
 # WARNING
 
--   File system errors occur during rename operations will cause the
-    program to leave the renames possibly half done without any plan for
-    rollback or resume.
+-   File system errors that occur during rename operations will cause
+    the program to leave the renames possibly half done without any plan
+    for rollback or resume.
 
 # FILES
 

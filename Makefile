@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -ggdb -O2
+CFLAGS = -Wall -Wextra -Werror -std=c99 -ggdb -O2
 TARGET = emv
 SOURCE = emv.c
 
