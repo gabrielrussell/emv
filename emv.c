@@ -96,28 +96,46 @@ cleanup:
   return error_string;
 }
 
-char *create_temp_file(file_entry *files, int count, char *temp_path) {
-  int fd;
-  FILE *fp;
+char *create_temp_file(file_entry *files, int count, char **temp_path) {
+  int fd = -1;
+  FILE *fp = NULL;
+  char *error_string = NULL;
 
-  strcpy(temp_path, "/tmp/emv_XXXXXX");
-  fd = mkstemp(temp_path);
+  *temp_path = strdup("/tmp/emv_XXXXXX");
+  if (!*temp_path) {
+    error_string = strdup("failed to allocate memory for temp path");
+    goto cleanup;
+  }
+  
+  fd = mkstemp(*temp_path);
   if (fd == -1) {
-    return strdup("failed to create temporary file");
+    error_string = strdup("failed to create temporary file");
+    goto cleanup;
   }
 
   fp = fdopen(fd, "w");
   if (!fp) {
-    close(fd);
-    return strdup("failed to open temporary file for writing");
+    error_string = strdup("failed to open temporary file for writing");
+    goto cleanup;
   }
 
   for (int i = 0; i < count; i++) {
     fprintf(fp, "%s\n", files[i].name);
   }
 
-  fclose(fp);
-  return NULL;
+cleanup:
+  if (fp) {
+    fclose(fp);
+  } else if (fd != -1) {
+    close(fd);
+  }
+  
+  if (error_string && *temp_path) {
+    free(*temp_path);
+    *temp_path = NULL;
+  }
+  
+  return error_string;
 }
 
 char *invoke_editor(const char *temp_path) {
@@ -349,7 +367,7 @@ int main(int argc, char *argv[]) {
   file_entry *old_files = NULL;
   file_entry *new_files = NULL;
   rename_entry *renames = NULL;
-  char temp_path[] = "/tmp/emv_XXXXXX";
+  char *temp_path = NULL;
   char *error_string = NULL;
   int old_count = 0, new_count = 0, rename_count = 0, tricky = 0;
   int temp_file_created = 0;
@@ -367,7 +385,7 @@ int main(int argc, char *argv[]) {
     goto cleanup;
   }
 
-  error_string = create_temp_file(old_files, old_count, temp_path);
+  error_string = create_temp_file(old_files, old_count, &temp_path);
   if (error_string) {
     goto cleanup;
   }
@@ -398,8 +416,9 @@ int main(int argc, char *argv[]) {
     goto cleanup;
 
 cleanup:
-  if (temp_file_created) {
+  if (temp_file_created && temp_path) {
     unlink(temp_path);
+    free(temp_path);
   }
   if (old_files) {
     free_file_entries(old_files, old_count);
