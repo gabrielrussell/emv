@@ -10,15 +10,18 @@ $(TARGET): $(SOURCE)
 
 clean:
 	rm -f $(TARGET)
+	rm emv.1.gz
 
 README.md: emv.1
 	pandoc -f man -t markdown emv.1 -o README.md
 
-install: $(TARGET)
+emv.1.gz: emv.1
+	gzip -c emv.1 > emv.1.gz
+
+install: $(TARGET) emv.1.gz
 	cp $(TARGET) /usr/local/bin/
 	mkdir -p /usr/local/share/man/man1
-	cp emv.1 /usr/local/share/man/man1/
-	gzip -f /usr/local/share/man/man1/emv.1
+	cp emv.1.gz /usr/local/share/man/man1/
 
 test: $(TARGET)
 	./test.sh
