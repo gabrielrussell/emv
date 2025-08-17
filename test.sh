@@ -10,6 +10,14 @@ PASSED=0
 FAILED=0
 TOTAL=0
 
+# Check if we should run under valgrind
+if [[ "$VALGRIND" == "1" ]]; then
+    VALGRIND_CMD="valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 --quiet"
+    echo -e "${YELLOW}Running tests under valgrind...${NC}"
+else
+    VALGRIND_CMD=""
+fi
+
 # Function to print test results
 print_result() {
     local test_name="$1"
@@ -61,7 +69,7 @@ EOF
     chmod +x mock_editor.sh
     
     # Run emv with mock editor
-    EDITOR="./mock_editor.sh" ../emv
+    EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
     
     # Check results
     [[ -f "renamed1.txt" && -f "renamed2.txt" && -f "file3.txt" && ! -f "file1.txt" && ! -f "file2.txt" ]]
@@ -79,7 +87,7 @@ exit 0
 EOF
     chmod +x mock_editor.sh
     
-    EDITOR="./mock_editor.sh" ../emv
+    EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
     
     # Files should remain the same
     [[ -f "file1.txt" && -f "file2.txt" ]]
@@ -96,7 +104,7 @@ sed 's/fileA\.txt/temp_swap/; s/fileB\.txt/fileA.txt/; s/temp_swap/fileB.txt/' "
 EOF
     chmod +x mock_editor.sh
     
-    EDITOR="./mock_editor.sh" ../emv
+    EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
     
     # Check that files were swapped correctly
     [[ -f "fileA.txt" && -f "fileB.txt" ]]
@@ -114,7 +122,7 @@ EOF
     chmod +x mock_editor.sh
     
     # Should fail with file count error
-    ! EDITOR="./mock_editor.sh" ../emv 2>/dev/null
+    ! EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv 2>/dev/null
 }
 
 # Test: Error - duplicate rename targets
@@ -129,7 +137,7 @@ EOF
     chmod +x mock_editor.sh
     
     # Should fail with non-unique renames error
-    ! EDITOR="./mock_editor.sh" ../emv 2>/dev/null
+    ! EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv 2>/dev/null
 }
 
 # Test: Error - overwrite existing file
@@ -144,7 +152,7 @@ EOF
     chmod +x mock_editor.sh
     
     # Should fail with overwrite error
-    ! EDITOR="./mock_editor.sh" ../emv 2>/dev/null
+    ! EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv 2>/dev/null
 }
 
 # Test: Error - no EDITOR environment variable
@@ -152,7 +160,7 @@ test_no_editor_error() {
     touch "file1.txt"
     
     # Should fail when EDITOR is not set
-    ! env -u EDITOR ../emv 2>/dev/null
+    ! env -u EDITOR $VALGRIND_CMD ../emv 2>/dev/null
 }
 
 # Test: Long filenames (no truncation)
@@ -168,7 +176,7 @@ sed 's/very_long_filename_that_would_have_been_truncated_in_the_old_version_with
 EOF
     chmod +x mock_editor.sh
     
-    EDITOR="./mock_editor.sh" ../emv
+    EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
     
     # Check that long filename rename worked
     [[ -f "another_very_long_filename_that_tests_dynamic_allocation_and_should_not_be_truncated_at_all.txt" && ! -f "$long_name" ]]
@@ -188,7 +196,7 @@ sed 's/^/renamed_/' "$1" > tmp && mv tmp "$1"
 EOF
     chmod +x mock_editor.sh
     
-    EDITOR="./mock_editor.sh" ../emv
+    EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
     
     # Check that all files were renamed
     local count=0
@@ -213,7 +221,7 @@ sed 's/^/new_/' "$1" > tmp && mv tmp "$1"
 EOF
     chmod +x mock_editor.sh
     
-    EDITOR="./mock_editor.sh" ../emv
+    EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
     
     # Check results
     [[ -f "new_file with spaces.txt" && -f "new_file-with-dashes.txt" && -f "new_file_with_underscores.txt" ]]

@@ -15,4 +15,7 @@ install: $(TARGET)
 test: $(TARGET)
 	./test.sh
 
-.PHONY: clean install test
+test-valgrind: $(TARGET)
+	VALGRIND=1 ./test.sh
+
+.PHONY: clean install test test-valgrind
