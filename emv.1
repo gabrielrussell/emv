@@ -1,6 +1,6 @@
 .TH EMV 1 "August 2025" "emv 1.0" "User Commands"
 .SH NAME
-emv \- rename multiple files in a directory all at once with a text editor
+emv \- rename multiple files in a directory in bulk via editing a file listing in a text editor
 
 .SH SYNOPSIS
 .B emv
@@ -8,7 +8,7 @@ emv \- rename multiple files in a directory all at once with a text editor
 
 .SH DESCRIPTION
 .B emv
-(edit move) is a utility that allows you to rename multiple filesystem objects (files, directories, symbolic links, etc.) by editing their names in your preferred text editor. It presents a list of names in a temporary file, opens your editor to modify the list, and then performs the necessary rename operations to match your edits.
+(edit move) is a utility that allows you to rename multiple files by editing a list of their names in your preferred text editor. It presents a list of names in a temporary file, opens your editor to modify the list, and then performs the necessary rename operations to match your edits.
 
 .P
 The program tries to handle complex rename scenarios including file swapping (A→B, B→A) by using temporary storage when necessary. It tries to validate all rename operations before executing them to try to prevent data loss.
@@ -27,6 +27,15 @@ Open the file in your text editor ($EDITOR environment variable)
 After you save and exit the editor, analyze the changes
 .IP 5. 4
 Perform the rename operations to match your edited list
+
+.SH USAGE
+If you want to bail out half way through editing the file list, you can do one of two things:
+.IP 1. 4
+If you haven't saved your work, you can quit without saving. If the file is unchanged nothing will happen.
+.IP 2. 4
+If you have saved, but need to abandon your work nonetheless, you can simply delete all of the lines of the file and then save and quit. Because
+.B emv
+will only ever attempt to do any renames if the edited file has the same number of entries as it started out having, deleting all of the lines should guarantee that nothing will happen.
 
 .SH ARGUMENTS
 .TP
@@ -100,14 +109,6 @@ A rename would overwrite an existing unchanged entry
 .IP \(bu 4
 File system errors occur during rename operations will cause the program to leave the renames possibly half done without any plan for rollback or resume.
 
-.SH EXIT STATUS
-.TP
-.B 0
-Success
-.TP
-.B 1
-Error occurred (invalid arguments, editor failure, rename conflicts, file system errors)
-
 .SH FILES
 .TP
 .B /tmp/emv_XXXXXX
@@ -137,4 +138,4 @@ Report bugs at: https://github.com/gabrielrussell/emv/issues
 Gabriel Russell
 
 .SH COPYRIGHT
-This software is provided as-is without warranty. See the source code for license details.
+This software is provided as-is without warranty.

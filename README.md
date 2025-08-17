@@ -1,7 +1,7 @@
 # NAME
 
-emv - rename multiple files in a directory all at once with a text
-editor
+emv - rename multiple files in a directory in bulk via editing a file
+listing in a text editor
 
 # SYNOPSIS
 
@@ -10,10 +10,10 @@ editor
 # DESCRIPTION
 
 **emv** (edit move) is a utility that allows you to rename multiple
-filesystem objects (files, directories, symbolic links, etc.) by editing
-their names in your preferred text editor. It presents a list of names
-in a temporary file, opens your editor to modify the list, and then
-performs the necessary rename operations to match your edits.
+files by editing a list of their names in your preferred text editor. It
+presents a list of names in a temporary file, opens your editor to
+modify the list, and then performs the necessary rename operations to
+match your edits.
 
 The program tries to handle complex rename scenarios including file
 swapping (A→B, B→A) by using temporary storage when necessary. It tries
@@ -34,6 +34,21 @@ When run, **emv** will:
 4.  After you save and exit the editor, analyze the changes
 
 5.  Perform the rename operations to match your edited list
+
+# USAGE
+
+If you want to bail out half way through editing the file list, you can
+do one of two things:
+
+1.  If you haven\'t saved your work, you can quit without saving. If the
+    file is unchanged nothing will happen.
+
+2.  If you have saved, but need to abandon your work nonetheless, you
+    can simply delete all of the lines of the file and then save and
+    quit. Because **emv** will only ever attempt to do any renames if
+    the edited file has the same number of entries as it started out
+    having, deleting all of the lines should guarantee that nothing will
+    happen.
 
 # ARGUMENTS
 
@@ -121,17 +136,6 @@ When you save and exit, they will be renamed accordingly.
     program to leave the renames possibly half done without any plan for
     rollback or resume.
 
-# EXIT STATUS
-
-**0**
-
-:   Success
-
-**1**
-
-:   Error occurred (invalid arguments, editor failure, rename conflicts,
-    file system errors)
-
 # FILES
 
 **/tmp/emv_XXXXXX**
@@ -166,5 +170,4 @@ Gabriel Russell
 
 # COPYRIGHT
 
-This software is provided as-is without warranty. See the source code
-for license details.
+This software is provided as-is without warranty.
