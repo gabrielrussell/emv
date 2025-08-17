@@ -10,13 +10,49 @@ PASSED=0
 FAILED=0
 TOTAL=0
 
+# Check if we should run in verbose mode first
+if [[ "$VERBOSE" == "1" || "$1" == "-v" || "$1" == "--verbose" ]]; then
+    VERBOSE_MODE=1
+    echo -e "${YELLOW}Running tests in verbose mode...${NC}"
+    #set -x  # Enable bash command tracing
+else
+    VERBOSE_MODE=0
+fi
+
 # Check if we should run under valgrind
 if [[ "$VALGRIND" == "1" ]]; then
-    VALGRIND_CMD="valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 --quiet"
+    if [[ "$VERBOSE_MODE" == "1" ]]; then
+        VALGRIND_CMD="valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1"
+    else
+        VALGRIND_CMD="valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 --quiet"
+    fi
     echo -e "${YELLOW}Running tests under valgrind...${NC}"
 else
     VALGRIND_CMD=""
 fi
+
+# Function to run commands with optional verbosity
+run_cmd() {
+    local cmd="$1"
+    local description="$2"
+    
+    if [[ "$VERBOSE_MODE" == "1" ]]; then
+        echo -e "${YELLOW}Running:${NC} $description"
+        echo -e "${YELLOW}Command:${NC} $cmd"
+        echo -e "${YELLOW}Output:${NC}"
+    fi
+    
+    # Run the command and capture both stdout and stderr
+    if [[ "$VERBOSE_MODE" == "1" ]]; then
+        eval "$cmd"
+        local exit_code=$?
+        echo -e "${YELLOW}Exit code:${NC} $exit_code"
+        return $exit_code
+    else
+        eval "$cmd"
+        return $?
+    fi
+}
 
 # Function to print test results
 print_result() {
@@ -71,7 +107,7 @@ EOF
     chmod +x mock_editor.sh
     
     # Run emv with mock editor
-    EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
+    run_cmd "EDITOR=\"./mock_editor.sh\" $VALGRIND_CMD ../emv" "Running emv with basic rename"
     
     # Check that files exist with correct names
     [[ -f "renamed1.txt" && -f "renamed2.txt" && -f "file3.txt" && ! -f "file1.txt" && ! -f "file2.txt" ]] || return 1
@@ -96,7 +132,7 @@ exit 0
 EOF
     chmod +x mock_editor.sh
     
-    EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
+    run_cmd "EDITOR=\"./mock_editor.sh\" $VALGRIND_CMD ../emv" "Running emv with no changes"
     
     # Files should remain the same
     [[ -f "file1.txt" && -f "file2.txt" ]] || return 1
@@ -119,7 +155,7 @@ sed 's/fileA\.txt/temp_swap/; s/fileB\.txt/fileA.txt/; s/temp_swap/fileB.txt/' "
 EOF
     chmod +x mock_editor.sh
     
-    EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
+    run_cmd "EDITOR=\"./mock_editor.sh\" $VALGRIND_CMD ../emv" "Running emv with file swap"
     
     # Check that files exist with swapped names
     [[ -f "fileA.txt" && -f "fileB.txt" ]] || return 1
@@ -143,7 +179,7 @@ EOF
     chmod +x mock_editor.sh
     
     # Should fail with file count error
-    ! EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv 2>/dev/null
+    ! run_cmd "EDITOR=\"./mock_editor.sh\" $VALGRIND_CMD ../emv" "Running emv expecting file count error"
 }
 
 # Test: Error - duplicate rename targets
@@ -158,7 +194,7 @@ EOF
     chmod +x mock_editor.sh
     
     # Should fail with non-unique renames error
-    ! EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv 2>/dev/null
+    ! run_cmd "EDITOR=\"./mock_editor.sh\" $VALGRIND_CMD ../emv" "Running emv expecting duplicate rename error"
 }
 
 # Test: Error - overwrite existing file
@@ -173,7 +209,7 @@ EOF
     chmod +x mock_editor.sh
     
     # Should fail with overwrite error
-    ! EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv 2>/dev/null
+    ! run_cmd "EDITOR=\"./mock_editor.sh\" $VALGRIND_CMD ../emv" "Running emv expecting overwrite error"
 }
 
 # Test: Error - no EDITOR environment variable
@@ -181,7 +217,7 @@ test_no_editor_error() {
     touch "file1.txt"
     
     # Should fail when EDITOR is not set
-    ! env -u EDITOR $VALGRIND_CMD ../emv 2>/dev/null
+    ! run_cmd "env -u EDITOR $VALGRIND_CMD ../emv" "Running emv expecting no EDITOR error"
 }
 
 # Test: Long filenames (no truncation)
@@ -197,7 +233,7 @@ sed 's/very_long_filename_that_would_have_been_truncated_in_the_old_version_with
 EOF
     chmod +x mock_editor.sh
     
-    EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
+    run_cmd "EDITOR=\"./mock_editor.sh\" $VALGRIND_CMD ../emv" "Running emv with long filenames"
     
     # Check that long filename rename worked
     new_long_name="another_very_long_filename_that_tests_dynamic_allocation_and_should_not_be_truncated_at_all.txt"
@@ -221,7 +257,7 @@ sed 's/^/renamed_/' "$1" > tmp && mv tmp "$1"
 EOF
     chmod +x mock_editor.sh
     
-    EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
+    run_cmd "EDITOR=\"./mock_editor.sh\" $VALGRIND_CMD ../emv" "Running emv with many files stress test"
     
     # Check that all files were renamed and content is correct
     local count=0
@@ -251,7 +287,7 @@ sed 's/^/new_/' "$1" > tmp && mv tmp "$1"
 EOF
     chmod +x mock_editor.sh
     
-    EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
+    run_cmd "EDITOR=\"./mock_editor.sh\" $VALGRIND_CMD ../emv" "Running emv with special characters"
     
     # Check that files exist with new names
     [[ -f "new_file with spaces.txt" && -f "new_file-with-dashes.txt" && -f "new_file_with_underscores.txt" ]] || return 1
@@ -265,14 +301,6 @@ EOF
 # Main test execution
 echo -e "${YELLOW}EMV Test Suite${NC}"
 echo "================"
-
-# Build the program first
-echo "Building emv..."
-make clean > /dev/null 2>&1
-if ! make > /dev/null 2>&1; then
-    echo -e "${RED}Build failed!${NC}"
-    exit 1
-fi
 
 # Run all tests
 run_test "Basic rename functionality" test_basic_rename

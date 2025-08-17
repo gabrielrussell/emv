@@ -411,7 +411,9 @@ cleanup:
     free_rename_entries(renames, rename_count);
   }
   if (error_string) {
-    error(1, 0, "%s\n", error_string);
+    fprintf(stderr, "%s\n", error_string);
+    free(error_string);
+    return 1;
   }
   return 0;
 }

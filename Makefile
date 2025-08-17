@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -O2
+CFLAGS = -Wall -Wextra -std=c99 -ggdb -O2
 TARGET = emv
 SOURCE = emv.c
 
@@ -21,4 +21,10 @@ test: $(TARGET)
 test-valgrind: $(TARGET)
 	VALGRIND=1 ./test.sh
 
-.PHONY: clean install test test-valgrind
+test-verbose: $(TARGET)
+	VERBOSE=1 ./test.sh
+
+test-valgrind-verbose: $(TARGET)
+	VALGRIND=1 VERBOSE=1 ./test.sh
+
+.PHONY: clean install test test-valgrind test-verbose test-valgrind-verbose
