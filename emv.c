@@ -42,20 +42,20 @@ char *read_directory(const char *path, file_entry **files, int *count) {
     DIR *dir = NULL;
     struct dirent *entry;
     int capacity = 16;
-    char *error = NULL;
+    char *error_string = NULL;
     
     *count = 0;
     *files = NULL;
     
     *files = malloc(capacity * sizeof(file_entry));
     if (!*files) {
-        error = strdup("failed to allocate memory for file list");
+        error_string = strdup("failed to allocate memory for file list");
         goto cleanup;
     }
     
     dir = opendir(path);
     if (!dir) {
-        error = strdup("failed to open directory");
+        error_string = strdup("failed to open directory");
         goto cleanup;
     }
     
@@ -65,14 +65,14 @@ char *read_directory(const char *path, file_entry **files, int *count) {
                 capacity *= 2;
                 file_entry *new_files = realloc(*files, capacity * sizeof(file_entry));
                 if (!new_files) {
-                    error = strdup("failed to reallocate memory for file list");
+                    error_string = strdup("failed to reallocate memory for file list");
                     goto cleanup;
                 }
                 *files = new_files;
             }
             (*files)[*count].name = strdup(entry->d_name);
             if (!(*files)[*count].name) {
-                error = strdup("failed to allocate memory for filename");
+                error_string = strdup("failed to allocate memory for filename");
                 goto cleanup;
             }
             (*count)++;
@@ -85,7 +85,7 @@ cleanup:
     if (dir) {
         closedir(dir);
     }
-    if (error && *files) {
+    if (error_string && *files) {
         for (int i = 0; i < *count; i++) {
             free((*files)[i].name);
         }
@@ -93,7 +93,7 @@ cleanup:
         *files = NULL;
         *count = 0;
     }
-    return error;
+    return error_string;
 }
 
 char *create_temp_file(file_entry *files, int count, char *temp_path) {
@@ -153,20 +153,20 @@ char *read_edited_files(const char *temp_path, file_entry **new_files, int *coun
     size_t line_len = 0;
     ssize_t read;
     int capacity = 16;
-    char *error = NULL;
+    char *error_string = NULL;
     
     *count = 0;
     *new_files = NULL;
     
     *new_files = malloc(capacity * sizeof(file_entry));
     if (!*new_files) {
-        error = strdup("failed to allocate memory for edited file list");
+        error_string = strdup("failed to allocate memory for edited file list");
         goto cleanup;
     }
     
     fp = fopen(temp_path, "r");
     if (!fp) {
-        error = strdup("failed to reopen temporary file for reading");
+        error_string = strdup("failed to reopen temporary file for reading");
         goto cleanup;
     }
     
@@ -180,14 +180,14 @@ char *read_edited_files(const char *temp_path, file_entry **new_files, int *coun
                 capacity *= 2;
                 file_entry *new_entries = realloc(*new_files, capacity * sizeof(file_entry));
                 if (!new_entries) {
-                    error = strdup("failed to reallocate memory for edited file list");
+                    error_string = strdup("failed to reallocate memory for edited file list");
                     goto cleanup;
                 }
                 *new_files = new_entries;
             }
             (*new_files)[*count].name = strdup(line);
             if (!(*new_files)[*count].name) {
-                error = strdup("failed to allocate memory for edited filename");
+                error_string = strdup("failed to allocate memory for edited filename");
                 goto cleanup;
             }
             (*count)++;
@@ -201,7 +201,7 @@ cleanup:
     if (line) {
         free(line);
     }
-    if (error && *new_files) {
+    if (error_string && *new_files) {
         for (int i = 0; i < *count; i++) {
             free((*new_files)[i].name);
         }
@@ -209,7 +209,7 @@ cleanup:
         *new_files = NULL;
         *count = 0;
     }
-    return error;
+    return error_string;
 }
 
 char *analyze_renames(file_entry *old_files, file_entry *new_files, int count, 
@@ -218,11 +218,11 @@ char *analyze_renames(file_entry *old_files, file_entry *new_files, int count,
     int *dest_count = calloc(count, sizeof(int));
     int *unchanged = calloc(count, sizeof(int));
     int capacity = count;
-    char *error = NULL;
+    char *error_string = NULL;
     
     *renames = malloc(capacity * sizeof(rename_entry));
     if (!orig_count || !dest_count || !unchanged || !*renames) {
-        error = strdup("failed to allocate memory for rename analysis");
+        error_string = strdup("failed to allocate memory for rename analysis");
         goto cleanup;
     }
     
@@ -234,7 +234,7 @@ char *analyze_renames(file_entry *old_files, file_entry *new_files, int count,
             (*renames)[*rename_count].old_name = strdup(old_files[i].name);
             (*renames)[*rename_count].new_name = strdup(new_files[i].name);
             if (!(*renames)[*rename_count].old_name || !(*renames)[*rename_count].new_name) {
-                error = strdup("failed to allocate memory for rename entry");
+                error_string = strdup("failed to allocate memory for rename entry");
                 goto cleanup;
             }
             (*rename_count)++;
@@ -250,22 +250,22 @@ char *analyze_renames(file_entry *old_files, file_entry *new_files, int count,
         }
     }
     
-    if (!error) {
+    if (!error_string) {
         // Check for duplicate new names
-        for (int i = 0; i < *rename_count && !error; i++) {
+        for (int i = 0; i < *rename_count && !error_string; i++) {
             for (int j = i + 1; j < *rename_count; j++) {
                 if (strcmp((*renames)[i].new_name, (*renames)[j].new_name) == 0) {
-                    error = strdup("multiple files would be renamed to the same name");
+                    error_string = strdup("multiple files would be renamed to the same name");
                     goto cleanup;
                 }
             }
         }
         
         // Check for overwriting unchanged files and detect tricky renames
-        for (int i = 0; i < count && !error; i++) {
-            for (int j = 0; j < *rename_count && !error; j++) {
+        for (int i = 0; i < count && !error_string; i++) {
+            for (int j = 0; j < *rename_count && !error_string; j++) {
                 if (strcmp((*renames)[j].new_name, old_files[i].name) == 0 && unchanged[i]) {
-                    error = strdup("rename would overwrite an existing unchanged file");
+                    error_string = strdup("rename would overwrite an existing unchanged file");
                     break;
                 }
                 
@@ -277,39 +277,41 @@ char *analyze_renames(file_entry *old_files, file_entry *new_files, int count,
     }
     
 cleanup:
-    if (error && *renames) {
+    if (error_string && *renames) {
         free_rename_entries(*renames, *rename_count);
         *renames = NULL;
     }
     free(orig_count);
     free(dest_count);
     free(unchanged);
-    return error;
+    return error_string;
 }
 
 char *perform_renames(rename_entry *renames, int rename_count, int tricky) {
     char temp_dir[] = "./emv_temp_XXXXXX";
+    char *error_string = NULL;
+    int temp_dir_created = 0;
     
     if (tricky) {
         if (mkdtemp(temp_dir) == NULL) {
-            return strdup("failed to create temporary directory for tricky renames");
+            error_string = strdup("failed to create temporary directory for tricky renames");
+            goto cleanup;
         }
+        temp_dir_created = 1;
         
         for (int i = 0; i < rename_count; i++) {
             char *temp_path;
             asprintf(&temp_path, "%s/%s", temp_dir, renames[i].old_name);
             if (!temp_path) {
-                rmdir(temp_dir);
-                return strdup("failed to allocate memory for temporary path");
+                error_string = strdup("failed to allocate memory for temporary path");
+                goto cleanup;
             }
             
             if (rename(renames[i].old_name, temp_path) != 0) {
-                char *err;
-                asprintf(&err, "failed to move %s to temporary location: %s", 
+                asprintf(&error_string, "failed to move %s to temporary location: %s", 
                         renames[i].old_name, strerror(errno));
                 free(temp_path);
-                rmdir(temp_dir);
-                return err;
+                goto cleanup;
             }
             
             free(renames[i].old_name);
@@ -319,24 +321,19 @@ char *perform_renames(rename_entry *renames, int rename_count, int tricky) {
     
     for (int i = 0; i < rename_count; i++) {
         if (rename(renames[i].old_name, renames[i].new_name) != 0) {
-            if (tricky) rmdir(temp_dir);
-            char *err;
-            asprintf(&err, "failed to rename %s to %s: %s", 
+            asprintf(&error_string, "failed to rename %s to %s: %s", 
                     renames[i].old_name, renames[i].new_name, strerror(errno));
-            return err;
+            goto cleanup;
         }
     }
     
-    if (tricky) {
+cleanup:
+    if (temp_dir_created) {
         if (rmdir(temp_dir) != 0) {
-            char *err;
-            asprintf(&err, "failed to remove temporary directory %s: %s", 
-                    temp_dir, strerror(errno));
-            return err;
+            error(0, errno, "failed to remove temporary directory: %s", temp_dir);
         }
     }
-    
-    return NULL;
+    return error_string;
 }
 
 int main(int argc, char *argv[]) {
@@ -344,74 +341,48 @@ int main(int argc, char *argv[]) {
     file_entry *new_files = NULL;
     rename_entry *renames = NULL;
     char temp_path[] = "/tmp/emv_XXXXXX";
-    char *error = NULL;
+    char *error_string = NULL;
     int old_count = 0, new_count = 0, rename_count = 0, tricky = 0;
-    int exit_code = 0;
     int temp_file_created = 0;
     
     if (argc > 1) {
         if (chdir(argv[1]) != 0) {
-            fprintf(stderr, "failed to change to directory %s: %s\n", argv[1], strerror(errno));
-            exit_code = 1;
+            asprintf(&error_string, "failed to change to directory %s: %s", argv[1], strerror(errno));
             goto cleanup;
         }
     }
     
-    error = read_directory(".", &old_files, &old_count);
-    if (error) {
-        fprintf(stderr, "%s\n", error);
-        exit_code = 1;
+    error_string = read_directory(".", &old_files, &old_count);
+    if (error_string) {
         goto cleanup;
     }
     
-    error = create_temp_file(old_files, old_count, temp_path);
-    if (error) {
-        fprintf(stderr, "%s\n", error);
-        exit_code = 1;
+    error_string = create_temp_file(old_files, old_count, temp_path);
+    if (error_string) {
         goto cleanup;
     }
     temp_file_created = 1;
     
-    error = invoke_editor(temp_path);
-    if (error) {
-        fprintf(stderr, "%s\n", error);
-        exit_code = 1;
-        goto cleanup;
-    }
+    error_string = invoke_editor(temp_path);
+    if (error_string) goto cleanup;
     
-    error = read_edited_files(temp_path, &new_files, &new_count);
-    if (error) {
-        fprintf(stderr, "%s\n", error);
-        exit_code = 1;
-        goto cleanup;
-    }
+    error_string = read_edited_files(temp_path, &new_files, &new_count);
+    if (error_string) goto cleanup;
     
     if (old_count != new_count) {
-        fprintf(stderr, "file count changed: had %d files, now have %d files\n", old_count, new_count);
-        exit_code = 1;
+        asprintf(&error_string, "file count changed: had %d files, now have %d files", old_count, new_count);
         goto cleanup;
     }
     
-    error = analyze_renames(old_files, new_files, old_count, &renames, &rename_count, &tricky);
-    if (error) {
-        fprintf(stderr, "%s\n", error);
-        exit_code = 1;
-        goto cleanup;
-    }
+    error_string = analyze_renames(old_files, new_files, old_count, &renames, &rename_count, &tricky);
+    if (error_string) goto cleanup;
     
-    error = perform_renames(renames, rename_count, tricky);
-    if (error) {
-        fprintf(stderr, "%s\n", error);
-        exit_code = 1;
-        goto cleanup;
-    }
+    error_string = perform_renames(renames, rename_count, tricky);
+    if (error_string) goto cleanup;
 
 cleanup:
     if (temp_file_created) {
         unlink(temp_path);
-    }
-    if (error) {
-        free(error);
     }
     if (old_files) {
         free_file_entries(old_files, old_count);
@@ -422,5 +393,8 @@ cleanup:
     if (renames) {
         free_rename_entries(renames, rename_count);
     }
-    return exit_code;
+    if (error_string) {
+        error(1, 0, "%s\n", error_string);
+    }
+    return 0;
 }
