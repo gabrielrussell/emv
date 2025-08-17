@@ -39,21 +39,24 @@ void free_rename_entries(rename_entry *renames, int count) {
 }
 
 char *read_directory(const char *path, file_entry **files, int *count) {
-    DIR *dir;
+    DIR *dir = NULL;
     struct dirent *entry;
     int capacity = 16;
+    char *error = NULL;
+    
     *count = 0;
+    *files = NULL;
     
     *files = malloc(capacity * sizeof(file_entry));
     if (!*files) {
-        return strdup("failed to allocate memory for file list");
+        error = strdup("failed to allocate memory for file list");
+        goto cleanup;
     }
     
     dir = opendir(path);
     if (!dir) {
-        free(*files);
-        *files = NULL;
-        return strdup("failed to open directory");
+        error = strdup("failed to open directory");
+        goto cleanup;
     }
     
     while ((entry = readdir(dir)) != NULL) {
@@ -62,33 +65,35 @@ char *read_directory(const char *path, file_entry **files, int *count) {
                 capacity *= 2;
                 file_entry *new_files = realloc(*files, capacity * sizeof(file_entry));
                 if (!new_files) {
-                    closedir(dir);
-                    for (int i = 0; i < *count; i++) {
-                        free((*files)[i].name);
-                    }
-                    free(*files);
-                    *files = NULL;
-                    return strdup("failed to reallocate memory for file list");
+                    error = strdup("failed to reallocate memory for file list");
+                    goto cleanup;
                 }
                 *files = new_files;
             }
             (*files)[*count].name = strdup(entry->d_name);
             if (!(*files)[*count].name) {
-                closedir(dir);
-                for (int i = 0; i < *count; i++) {
-                    free((*files)[i].name);
-                }
-                free(*files);
-                *files = NULL;
-                return strdup("failed to allocate memory for filename");
+                error = strdup("failed to allocate memory for filename");
+                goto cleanup;
             }
             (*count)++;
         }
     }
     
-    closedir(dir);
     qsort(*files, *count, sizeof(file_entry), compare_file_entry);
-    return NULL;
+
+cleanup:
+    if (dir) {
+        closedir(dir);
+    }
+    if (error && *files) {
+        for (int i = 0; i < *count; i++) {
+            free((*files)[i].name);
+        }
+        free(*files);
+        *files = NULL;
+        *count = 0;
+    }
+    return error;
 }
 
 char *create_temp_file(file_entry *files, int count, char *temp_path) {
@@ -143,23 +148,26 @@ char *invoke_editor(const char *temp_path) {
 }
 
 char *read_edited_files(const char *temp_path, file_entry **new_files, int *count) {
-    FILE *fp;
+    FILE *fp = NULL;
     char *line = NULL;
     size_t line_len = 0;
     ssize_t read;
     int capacity = 16;
+    char *error = NULL;
+    
     *count = 0;
+    *new_files = NULL;
     
     *new_files = malloc(capacity * sizeof(file_entry));
     if (!*new_files) {
-        return strdup("failed to allocate memory for edited file list");
+        error = strdup("failed to allocate memory for edited file list");
+        goto cleanup;
     }
     
     fp = fopen(temp_path, "r");
     if (!fp) {
-        free(*new_files);
-        *new_files = NULL;
-        return strdup("failed to reopen temporary file for reading");
+        error = strdup("failed to reopen temporary file for reading");
+        goto cleanup;
     }
     
     while ((read = getline(&line, &line_len, fp)) != -1) {
@@ -172,35 +180,36 @@ char *read_edited_files(const char *temp_path, file_entry **new_files, int *coun
                 capacity *= 2;
                 file_entry *new_entries = realloc(*new_files, capacity * sizeof(file_entry));
                 if (!new_entries) {
-                    fclose(fp);
-                    free(line);
-                    for (int i = 0; i < *count; i++) {
-                        free((*new_files)[i].name);
-                    }
-                    free(*new_files);
-                    *new_files = NULL;
-                    return strdup("failed to reallocate memory for edited file list");
+                    error = strdup("failed to reallocate memory for edited file list");
+                    goto cleanup;
                 }
                 *new_files = new_entries;
             }
             (*new_files)[*count].name = strdup(line);
             if (!(*new_files)[*count].name) {
-                fclose(fp);
-                free(line);
-                for (int i = 0; i < *count; i++) {
-                    free((*new_files)[i].name);
-                }
-                free(*new_files);
-                *new_files = NULL;
-                return strdup("failed to allocate memory for edited filename");
+                error = strdup("failed to allocate memory for edited filename");
+                goto cleanup;
             }
             (*count)++;
         }
     }
-    
-    free(line);
-    fclose(fp);
-    return NULL;
+
+cleanup:
+    if (fp) {
+        fclose(fp);
+    }
+    if (line) {
+        free(line);
+    }
+    if (error && *new_files) {
+        for (int i = 0; i < *count; i++) {
+            free((*new_files)[i].name);
+        }
+        free(*new_files);
+        *new_files = NULL;
+        *count = 0;
+    }
+    return error;
 }
 
 char *analyze_renames(file_entry *old_files, file_entry *new_files, int count, 

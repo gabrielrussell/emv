@@ -58,8 +58,10 @@ run_test() {
 
 # Test: Basic rename functionality
 test_basic_rename() {
-    # Create test files
-    touch "file1.txt" "file2.txt" "file3.txt"
+    # Create test files with unique content
+    echo "content of file 1" > "file1.txt"
+    echo "content of file 2" > "file2.txt"
+    echo "content of file 3" > "file3.txt"
     
     # Create a mock editor that renames files
     cat > mock_editor.sh << 'EOF'
@@ -71,13 +73,20 @@ EOF
     # Run emv with mock editor
     EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
     
-    # Check results
-    [[ -f "renamed1.txt" && -f "renamed2.txt" && -f "file3.txt" && ! -f "file1.txt" && ! -f "file2.txt" ]]
+    # Check that files exist with correct names
+    [[ -f "renamed1.txt" && -f "renamed2.txt" && -f "file3.txt" && ! -f "file1.txt" && ! -f "file2.txt" ]] || return 1
+    
+    # Check that content moved correctly with the filenames
+    [[ "$(cat renamed1.txt)" == "content of file 1" ]] || return 1
+    [[ "$(cat renamed2.txt)" == "content of file 2" ]] || return 1
+    [[ "$(cat file3.txt)" == "content of file 3" ]] || return 1
 }
 
 # Test: No changes (files stay the same)
 test_no_changes() {
-    touch "file1.txt" "file2.txt"
+    # Create files with content
+    echo "unchanged content 1" > "file1.txt"
+    echo "unchanged content 2" > "file2.txt"
     
     # Mock editor that doesn't change anything
     cat > mock_editor.sh << 'EOF'
@@ -90,12 +99,18 @@ EOF
     EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
     
     # Files should remain the same
-    [[ -f "file1.txt" && -f "file2.txt" ]]
+    [[ -f "file1.txt" && -f "file2.txt" ]] || return 1
+    
+    # Content should remain unchanged
+    [[ "$(cat file1.txt)" == "unchanged content 1" ]] || return 1
+    [[ "$(cat file2.txt)" == "unchanged content 2" ]] || return 1
 }
 
 # Test: Tricky renames (A->B, B->A swap)
 test_swap_files() {
-    touch "fileA.txt" "fileB.txt"
+    # Create files with distinct content to verify correct swapping
+    echo "This was originally fileA" > "fileA.txt"
+    echo "This was originally fileB" > "fileB.txt"
     
     # Mock editor that swaps filenames
     cat > mock_editor.sh << 'EOF'
@@ -106,8 +121,14 @@ EOF
     
     EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
     
-    # Check that files were swapped correctly
-    [[ -f "fileA.txt" && -f "fileB.txt" ]]
+    # Check that files exist with swapped names
+    [[ -f "fileA.txt" && -f "fileB.txt" ]] || return 1
+    
+    # Most importantly: verify that content was swapped correctly
+    # fileA.txt should now contain the original fileB content
+    [[ "$(cat fileA.txt)" == "This was originally fileB" ]] || return 1
+    # fileB.txt should now contain the original fileA content  
+    [[ "$(cat fileB.txt)" == "This was originally fileA" ]] || return 1
 }
 
 # Test: Error - file count mismatch (line deletion)
@@ -165,9 +186,9 @@ test_no_editor_error() {
 
 # Test: Long filenames (no truncation)
 test_long_filenames() {
-    # Create file with very long name
+    # Create file with very long name and unique content
     long_name="very_long_filename_that_would_have_been_truncated_in_the_old_version_with_fixed_buffers_but_should_work_fine_now.txt"
-    touch "$long_name"
+    echo "content for very long filename test" > "$long_name"
     
     # Mock editor that renames to another long name
     cat > mock_editor.sh << 'EOF'
@@ -179,14 +200,18 @@ EOF
     EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
     
     # Check that long filename rename worked
-    [[ -f "another_very_long_filename_that_tests_dynamic_allocation_and_should_not_be_truncated_at_all.txt" && ! -f "$long_name" ]]
+    new_long_name="another_very_long_filename_that_tests_dynamic_allocation_and_should_not_be_truncated_at_all.txt"
+    [[ -f "$new_long_name" && ! -f "$long_name" ]] || return 1
+    
+    # Verify content moved with the filename
+    [[ "$(cat "$new_long_name")" == "content for very long filename test" ]] || return 1
 }
 
 # Test: Many files (stress test)
 test_many_files() {
-    # Create 100 files
+    # Create 100 files with unique content
     for i in {1..100}; do
-        touch "file_$i.txt"
+        echo "content of file number $i" > "file_$i.txt"
     done
     
     # Mock editor that adds prefix to all files
@@ -198,11 +223,14 @@ EOF
     
     EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
     
-    # Check that all files were renamed
+    # Check that all files were renamed and content is correct
     local count=0
     for i in {1..100}; do
         if [[ -f "renamed_file_$i.txt" ]]; then
-            count=$((count + 1))
+            # Verify content moved correctly
+            if [[ "$(cat "renamed_file_$i.txt")" == "content of file number $i" ]]; then
+                count=$((count + 1))
+            fi
         fi
     done
     
@@ -211,8 +239,10 @@ EOF
 
 # Test: Special characters in filenames
 test_special_characters() {
-    # Create files with spaces and special characters
-    touch "file with spaces.txt" "file-with-dashes.txt" "file_with_underscores.txt"
+    # Create files with spaces and special characters, each with unique content
+    echo "content with spaces" > "file with spaces.txt"
+    echo "content with dashes" > "file-with-dashes.txt"
+    echo "content with underscores" > "file_with_underscores.txt"
     
     # Mock editor that adds prefix
     cat > mock_editor.sh << 'EOF'
@@ -223,8 +253,13 @@ EOF
     
     EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv
     
-    # Check results
-    [[ -f "new_file with spaces.txt" && -f "new_file-with-dashes.txt" && -f "new_file_with_underscores.txt" ]]
+    # Check that files exist with new names
+    [[ -f "new_file with spaces.txt" && -f "new_file-with-dashes.txt" && -f "new_file_with_underscores.txt" ]] || return 1
+    
+    # Verify content moved correctly with special character filenames
+    [[ "$(cat "new_file with spaces.txt")" == "content with spaces" ]] || return 1
+    [[ "$(cat "new_file-with-dashes.txt")" == "content with dashes" ]] || return 1
+    [[ "$(cat "new_file_with_underscores.txt")" == "content with underscores" ]] || return 1
 }
 
 # Main test execution

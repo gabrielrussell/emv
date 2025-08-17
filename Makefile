@@ -11,6 +11,9 @@ clean:
 
 install: $(TARGET)
 	cp $(TARGET) /usr/local/bin/
+	mkdir -p /usr/local/share/man/man1
+	cp emv.1 /usr/local/share/man/man1/
+	gzip -f /usr/local/share/man/man1/emv.1
 
 test: $(TARGET)
 	./test.sh
