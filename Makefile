@@ -12,4 +12,7 @@ clean:
 install: $(TARGET)
 	cp $(TARGET) /usr/local/bin/
 
-.PHONY: clean install
+test: $(TARGET)
+	./test.sh
+
+.PHONY: clean install test
