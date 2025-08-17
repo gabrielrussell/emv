@@ -9,16 +9,12 @@ listing in a text editor
 
 # DESCRIPTION
 
-**emv** (edit move) is a utility that allows you to rename multiple
-files by editing a list of their names in your preferred text editor. It
-presents a list of names in a temporary file, opens your editor to
-modify the list, and then performs the necessary rename operations to
-match your edits.
+**emv** (edit move) allows you to rename multiple files by editing their
+names in a text editor. It creates a list of filenames, opens your
+editor, then renames files to match your changes.
 
-The program tries to handle complex rename scenarios including file
-swapping (A→B, B→A) by using temporary storage when necessary. It tries
-to validate all rename operations before executing them to try to
-prevent data loss.
+Handles file swapping (A→B, B→A) using temporary storage. Validates
+renames before executing.
 
 # USAGE
 
@@ -37,18 +33,8 @@ When run, **emv** will:
 
 # ABORTING CHANGES
 
-If you want to bail out half way through editing the file list, you can
-do one of two things:
-
-1.  If you haven\'t saved your work, you can quit without saving. If the
-    file is unchanged nothing will happen.
-
-2.  If you have saved, but need to abandon your work nonetheless, you
-    can simply delete all of the lines of the file and then save and
-    quit. Because **emv** will only ever attempt to do any renames if
-    the edited file has the same number of entries as it started out
-    having, deleting all of the lines should guarantee that nothing will
-    happen.
+To cancel: quit without saving, or delete all lines and save (empty file
+does nothing).
 
 # ARGUMENTS
 
@@ -132,9 +118,8 @@ When you save and exit, they will be renamed accordingly.
 
 # WARNING
 
--   File system errors that occur during rename operations will cause
-    the program to leave the renames possibly half done without any plan
-    for rollback or resume.
+-   File system errors during rename operations may leave some files
+    renamed and others not. No rollback mechanism.
 
 # FILES
 
@@ -149,12 +134,11 @@ When you save and exit, they will be renamed accordingly.
 
 # NOTES
 
--   Should work on all filesystem objects: files, directories, symbolic
-    links, etc.
+-   Works on files, directories, and symbolic links
 
--   Hidden entries (those starting with \'.\') are ignored
+-   Ignores hidden entries (starting with \'.\')
 
--   Entries containing newline characters in their names are ignored
+-   Ignores entries with newline characters
 
 # SEE ALSO
 
