@@ -3,11 +3,16 @@ CFLAGS = -Wall -Wextra -std=c99 -ggdb -O2
 TARGET = emv
 SOURCE = emv.c
 
+all: $(TARGET) README.md
+
 $(TARGET): $(SOURCE)
 	$(CC) $(CFLAGS) -o $(TARGET) $(SOURCE)
 
 clean:
 	rm -f $(TARGET)
+
+README.md: emv.1
+	pandoc -f man -t markdown emv.1 -o README.md
 
 install: $(TARGET)
 	cp $(TARGET) /usr/local/bin/
