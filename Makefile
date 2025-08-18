@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -Werror -std=c99 -ggdb -O2
 TARGET = emv
-SOURCE = emv.c
+SOURCE = $(TARGET).c
 
 all: $(TARGET) README.md
 
@@ -10,18 +10,18 @@ $(TARGET): $(SOURCE)
 
 clean:
 	rm -f $(TARGET)
-	rm emv.1.gz
+	rm $(TARGET).1.gz
 
-README.md: emv.1
-	pandoc -f man -t markdown emv.1 -o README.md
+README.md: $(TARGET).1
+	pandoc -f man -t markdown $(TARGET).1 -o README.md
 
-emv.1.gz: emv.1
-	gzip -c emv.1 > emv.1.gz
+$(TARGET).1.gz: $(TARGET).1
+	gzip -c $(TARGET).1 > $(TARGET).1.gz
 
-install: $(TARGET) emv.1.gz
+install: $(TARGET) $(TARGET).1.gz
 	cp $(TARGET) /usr/local/bin/
 	mkdir -p /usr/local/share/man/man1
-	cp emv.1.gz /usr/local/share/man/man1/
+	cp $(TARGET).1.gz /usr/local/share/man/man1/
 
 test: $(TARGET)
 	./test.sh
