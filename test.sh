@@ -212,6 +212,21 @@ EOF
     ! run_cmd "EDITOR=\"./mock_editor.sh\" $VALGRIND_CMD ../emv" "Running emv expecting overwrite error"
 }
 
+# Test: Error - slash in destination name
+test_slash_in_name_error() {
+    touch "file1.txt" "file2.txt"
+
+    # Mock editor that introduces a slash in a filename
+    cat > mock_editor.sh << 'EOF'
+#!/bin/bash
+sed 's/file1\.txt/subdir\/file1.txt/' "$1" > tmp && mv tmp "$1"
+EOF
+    chmod +x mock_editor.sh
+
+    # Should fail with slash error
+    ! run_cmd "EDITOR=\"./mock_editor.sh\" $VALGRIND_CMD ../emv" "Running emv expecting slash in name error"
+}
+
 # Test: Error - no EDITOR environment variable
 test_no_editor_error() {
     touch "file1.txt"
@@ -309,6 +324,7 @@ run_test "Tricky renames (file swapping)" test_swap_files
 run_test "File count mismatch error" test_file_count_error
 run_test "Duplicate rename targets error" test_duplicate_rename_error
 run_test "Overwrite existing file error" test_overwrite_error
+run_test "Slash in destination name error" test_slash_in_name_error
 run_test "No EDITOR environment error" test_no_editor_error
 run_test "Long filenames support" test_long_filenames
 run_test "Many files stress test" test_many_files

@@ -327,7 +327,15 @@ char *analyze_renames(char *error_buffer __attribute__((unused)),
   }
 
   if (!error_string) {
-    // Check for duplicate new names
+    // Check for slashes in destination names
+    for (int i = 0; i < *rename_count && !error_string; i++) {
+      if (strchr((*renames)[i].new_name, '/') != NULL) {
+        error_string = "renamed entry contains a '/' character";
+        goto cleanup;
+      }
+    }
+
+    // Check for duplicate destination names
     for (int i = 0; i < *rename_count && !error_string; i++) {
       for (int j = i + 1; j < *rename_count; j++) {
         if (strcmp((*renames)[i].new_name, (*renames)[j].new_name) == 0) {

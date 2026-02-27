@@ -92,6 +92,11 @@ When you save and exit, they will be renamed accordingly.
 
 :   You cannot rename multiple entries to the same name.
 
+**No slashes in names**
+
+:   Renamed entries cannot contain \'/\' characters. emv operates on a
+    single directory.
+
 **No overwriting unchanged entries**
 
 :   You cannot rename an entry to the name of an existing entry that you
@@ -113,6 +118,8 @@ When you save and exit, they will be renamed accordingly.
 -   The number of lines in the edited file differs from the original
 
 -   Multiple entries would be renamed to the same name
+
+-   A renamed entry contains a \'/\' character
 
 -   A rename would overwrite an existing unchanged entry
 

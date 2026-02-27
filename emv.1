@@ -79,6 +79,9 @@ You cannot add or remove lines from the list. The number of entries must remain 
 .B No duplicate names
 You cannot rename multiple entries to the same name.
 .TP
+.B No slashes in names
+Renamed entries cannot contain '/' characters. emv operates on a single directory.
+.TP
 .B No overwriting unchanged entries
 You cannot rename an entry to the name of an existing entry that you didn't also rename.
 .TP
@@ -96,6 +99,8 @@ The editor exits with a non-zero status
 The number of lines in the edited file differs from the original
 .IP \(bu 4
 Multiple entries would be renamed to the same name
+.IP \(bu 4
+A renamed entry contains a '/' character
 .IP \(bu 4
 A rename would overwrite an existing unchanged entry
 
