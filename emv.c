@@ -142,6 +142,14 @@ char *create_temp_file(char *error_buffer, file_entry *files, int count,
     fprintf(fp, "%s\n", files[i].name);
   }
 
+  if (ferror(fp)) {
+    snprintf(error_buffer, ERROR_BUFFER_SIZE,
+             "failed to write to temporary file %s: %s", *temp_path,
+             strerror(errno));
+    error_string = error_buffer;
+    goto cleanup;
+  }
+
 cleanup:
   if (fp) {
     fclose(fp);
@@ -288,13 +296,12 @@ char *analyze_renames(char *error_buffer __attribute__((unused)),
                       file_entry *old_files, file_entry *new_files, int count,
                       rename_entry **renames, int *rename_count, int *tricky) {
   int *orig_count = calloc(count, sizeof(int));
-  int *dest_count = calloc(count, sizeof(int));
   int *unchanged = calloc(count, sizeof(int));
   int capacity = count;
   char *error_string = NULL;
 
   *renames = malloc(capacity * sizeof(rename_entry));
-  if (!orig_count || !dest_count || !unchanged || !*renames) {
+  if (!orig_count || !unchanged || !*renames) {
     error_string = "failed to allocate memory for rename analysis";
     goto cleanup;
   }
@@ -314,11 +321,6 @@ char *analyze_renames(char *error_buffer __attribute__((unused)),
       (*rename_count)++;
 
       orig_count[i]++;
-      for (int j = 0; j < count; j++) {
-        if (strcmp(new_files[i].name, old_files[j].name) == 0) {
-          dest_count[j]++;
-        }
-      }
     } else {
       unchanged[i] = 1;
     }
@@ -358,7 +360,6 @@ cleanup:
     *renames = NULL;
   }
   free(orig_count);
-  free(dest_count);
   free(unchanged);
   return error_string;
 }
@@ -381,8 +382,7 @@ char *perform_renames(char *error_buffer, rename_entry *renames,
 
     for (int i = 0; i < rename_count; i++) {
       char *temp_path;
-      asprintf(&temp_path, "%s/%s", temp_dir, renames[i].old_name);
-      if (!temp_path) {
+      if (asprintf(&temp_path, "%s/%s", temp_dir, renames[i].old_name) == -1) {
         error_string = "failed to allocate memory for temporary path";
         goto cleanup;
       }
@@ -503,7 +503,7 @@ cleanup:
     free_rename_entries(renames, rename_count);
   }
   if (error_string) {
-    error(1, 0, "%s\n", error_string);
+    error(1, 0, "%s", error_string);
   }
   return 0;
 }
