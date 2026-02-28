@@ -10,7 +10,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <getopt.h>
+
 #define ERROR_BUFFER_SIZE 4096
+
+static int verbose = 0;
 
 typedef struct {
   char *name;
@@ -372,6 +376,36 @@ cleanup:
   return error_string;
 }
 
+// failed_index < 0 means all renames succeeded (success report)
+// temp_dir is non-NULL for tricky renames, used to show actual file locations
+void print_rename_report(rename_entry *renames, int rename_count,
+                         int failed_index, const char *fail_msg,
+                         int phase, const char *temp_dir) {
+  fprintf(stderr, "emv: rename report:\n");
+  for (int i = 0; i < rename_count; i++) {
+    if (failed_index < 0 || i < failed_index) {
+      if (phase == 1) {
+        fprintf(stderr, "  staged:  file is at %s/%s  (intended: %s)\n",
+                temp_dir, renames[i].old_name, renames[i].new_name);
+      } else {
+        fprintf(stderr, "  renamed: %s -> %s\n", renames[i].old_name,
+                renames[i].new_name);
+      }
+    } else if (i == failed_index) {
+      fprintf(stderr, "  FAILED:  %s -> %s: %s\n", renames[i].old_name,
+              renames[i].new_name, fail_msg);
+    } else {
+      if (temp_dir) {
+        fprintf(stderr, "  pending: file is at %s/%s  (intended: %s)\n",
+                temp_dir, renames[i].old_name, renames[i].new_name);
+      } else {
+        fprintf(stderr, "  pending: file is at %s  (intended: %s)\n",
+                renames[i].old_name, renames[i].new_name);
+      }
+    }
+  }
+}
+
 char *perform_renames(char *error_buffer, rename_entry *renames,
                       int rename_count, int tricky) {
   char temp_dir[] = "./emv_temp_XXXXXX";
@@ -388,6 +422,10 @@ char *perform_renames(char *error_buffer, rename_entry *renames,
     }
     temp_dir_created = 1;
 
+    if (verbose >= 2) {
+      fprintf(stderr, "creating temp directory for tricky renames\n");
+    }
+
     for (int i = 0; i < rename_count; i++) {
       char *temp_path;
       if (asprintf(&temp_path, "%s/%s", temp_dir, renames[i].old_name) == -1) {
@@ -395,7 +433,13 @@ char *perform_renames(char *error_buffer, rename_entry *renames,
         goto cleanup;
       }
 
+      if (verbose >= 2) {
+        fprintf(stderr, "staging %s -> %s\n", renames[i].old_name, temp_path);
+      }
+
       if (rename(renames[i].old_name, temp_path) != 0) {
+        print_rename_report(renames, rename_count, i, strerror(errno), 1,
+                            temp_dir);
         snprintf(error_buffer, ERROR_BUFFER_SIZE,
                  "failed to move %s to temporary location: %s",
                  renames[i].old_name, strerror(errno));
@@ -404,18 +448,48 @@ char *perform_renames(char *error_buffer, rename_entry *renames,
         goto cleanup;
       }
 
-      free(renames[i].old_name);
-      renames[i].old_name = temp_path;
+      free(temp_path);
     }
   }
 
   for (int i = 0; i < rename_count; i++) {
-    if (rename(renames[i].old_name, renames[i].new_name) != 0) {
+    char *src = renames[i].old_name;
+    char *temp_path = NULL;
+
+    if (tricky) {
+      if (asprintf(&temp_path, "%s/%s", temp_dir, src) == -1) {
+        error_string = "failed to allocate memory for temporary path";
+        goto cleanup;
+      }
+      src = temp_path;
+    }
+
+    if (verbose >= 2) {
+      fprintf(stderr, "renaming %s -> %s\n", src, renames[i].new_name);
+    }
+
+    if (rename(src, renames[i].new_name) != 0) {
+      print_rename_report(renames, rename_count, i, strerror(errno), 2,
+                          tricky ? temp_dir : NULL);
       snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to rename %s to %s: %s",
-               renames[i].old_name, renames[i].new_name, strerror(errno));
+               src, renames[i].new_name, strerror(errno));
       error_string = error_buffer;
+      free(temp_path);
       goto cleanup;
     }
+
+    free(temp_path);
+  }
+
+  // level 1: logical summary of completed renames
+  if (verbose >= 1) {
+    for (int i = 0; i < rename_count; i++) {
+      fprintf(stderr, "%s -> %s\n", renames[i].old_name, renames[i].new_name);
+    }
+  }
+
+  if (verbose >= 2 && temp_dir_created) {
+    fprintf(stderr, "removing temp directory\n");
   }
 
 cleanup:
@@ -427,8 +501,6 @@ cleanup:
                  strerror(errno));
         error_string = error_buffer;
       }
-      // If error_string is already set, we don't want to overwrite the original
-      // error
     }
   }
   return error_string;
@@ -444,10 +516,22 @@ int main(int argc, char *argv[]) {
   int old_count = 0, new_count = 0, rename_count = 0, tricky = 0;
   int temp_file_created = 0;
 
-  if (argc > 1) {
-    if (chdir(argv[1]) != 0) {
+  int opt;
+  while ((opt = getopt(argc, argv, "v")) != -1) {
+    switch (opt) {
+    case 'v':
+      verbose++;
+      break;
+    default:
+      fprintf(stderr, "usage: emv [-v | -vv] [directory]\n");
+      return 1;
+    }
+  }
+
+  if (optind < argc) {
+    if (chdir(argv[optind]) != 0) {
       snprintf(error_buffer, ERROR_BUFFER_SIZE,
-               "failed to change to directory %s: %s", argv[1],
+               "failed to change to directory %s: %s", argv[optind],
                strerror(errno));
       error_string = error_buffer;
       goto cleanup;

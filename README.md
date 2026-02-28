@@ -5,7 +5,7 @@ listing in a text editor
 
 # SYNOPSIS
 
-**emv** \[*directory*\]
+**emv** \[**-v** \| **-vv**\] \[*directory*\]
 
 # DESCRIPTION
 
@@ -35,6 +35,17 @@ When run, **emv** will:
 
 To cancel: quit without saving, or delete all lines and save (empty file
 does nothing).
+
+# OPTIONS
+
+**-v**
+
+:   Verbose mode. Print a summary of completed renames to stderr.
+
+**-vv**
+
+:   Extra verbose mode. Narrated walkthrough of each rename operation,
+    including staging to temporary directory for complex renames.
 
 # ARGUMENTS
 

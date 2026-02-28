@@ -313,6 +313,86 @@ EOF
     [[ "$(cat "new_file_with_underscores.txt")" == "content with underscores" ]] || return 1
 }
 
+# Test: Partial rename failure produces a report
+test_partial_rename_report() {
+    # Create three files: aaa, bbb, ccc (sorted order matters)
+    echo "content a" > "aaa"
+    echo "content b" > "bbb"
+    echo "content c" > "ccc"
+
+    # Mock editor that renames all three files AND creates a blocking
+    # directory at bbb's destination. The directory isn't in the original
+    # listing, so it passes validation, but rename() fails with EISDIR.
+    cat > mock_editor.sh << 'EOF'
+#!/bin/bash
+sed 's/^aaa$/new_aaa/; s/^bbb$/new_bbb/; s/^ccc$/new_ccc/' "$1" > tmp && mv tmp "$1"
+mkdir new_bbb
+EOF
+    chmod +x mock_editor.sh
+
+    # Capture stderr
+    local stderr_output
+    stderr_output=$(EDITOR="./mock_editor.sh" $VALGRIND_CMD ../emv 2>&1 1>/dev/null)
+
+    # Should have failed
+    [[ $? -ne 0 ]] || return 1
+
+    # Report should show aaa was renamed, bbb failed, ccc is pending
+    echo "$stderr_output" | grep -q "renamed:" || return 1
+    echo "$stderr_output" | grep -q "FAILED:" || return 1
+    echo "$stderr_output" | grep -q "pending:" || return 1
+
+    # aaa should have been renamed (it was before the failure)
+    [[ -f "new_aaa" ]] || return 1
+    [[ "$(cat new_aaa)" == "content a" ]] || return 1
+
+    # bbb should still exist (rename failed)
+    [[ -f "bbb" ]] || return 1
+
+    # ccc should still exist (not attempted)
+    [[ -f "ccc" ]] || return 1
+}
+
+# Test: Tricky rename pass-2 failure report
+test_tricky_rename_failure() {
+    # Create files that trigger a tricky rename (swap aaa<->bbb, plus rename ccc)
+    echo "content a" > "aaa"
+    echo "content b" > "bbb"
+    echo "content c" > "ccc"
+
+    # Mock editor: swap aaa<->bbb, rename ccc->ddd.
+    # Also creates a directory at "ddd" to block pass-2 rename of ccc->ddd.
+    # The directory isn't in the original listing (created after the scan),
+    # so it passes validation, but rename() fails with EISDIR in pass 2.
+    cat > .mock_editor.sh << 'EOF'
+#!/bin/bash
+sed 's/^aaa$/__SWAP__/; s/^bbb$/aaa/; s/^__SWAP__$/bbb/; s/^ccc$/ddd/' "$1" > tmp && mv tmp "$1"
+mkdir ddd
+EOF
+    chmod +x .mock_editor.sh
+
+    # Capture stderr
+    local stderr_output
+    stderr_output=$(EDITOR="./.mock_editor.sh" $VALGRIND_CMD ../emv 2>&1 1>/dev/null)
+
+    # Should have failed
+    [[ $? -ne 0 ]] || return 1
+
+    # Report should show the swap succeeded but ccc->ddd failed
+    echo "$stderr_output" | grep -q "FAILED:" || return 1
+    echo "$stderr_output" | grep -q "rename report:" || return 1
+
+    # The swap should have completed (aaa and bbb swapped)
+    [[ -f "aaa" && "$(cat aaa)" == "content b" ]] || return 1
+    [[ -f "bbb" && "$(cat bbb)" == "content a" ]] || return 1
+
+    # The temp directory should still exist with ccc stranded in it
+    local temp_dir
+    temp_dir=$(ls -d emv_temp_* 2>/dev/null)
+    [[ -n "$temp_dir" && -d "$temp_dir" ]] || return 1
+    [[ -f "$temp_dir/ccc" && "$(cat "$temp_dir/ccc")" == "content c" ]] || return 1
+}
+
 # Main test execution
 echo -e "${YELLOW}EMV Test Suite${NC}"
 echo "================"
@@ -325,6 +405,8 @@ run_test "File count mismatch error" test_file_count_error
 run_test "Duplicate rename targets error" test_duplicate_rename_error
 run_test "Overwrite existing file error" test_overwrite_error
 run_test "Slash in destination name error" test_slash_in_name_error
+run_test "Partial rename failure report" test_partial_rename_report
+run_test "Tricky rename pass-2 failure" test_tricky_rename_failure
 run_test "No EDITOR environment error" test_no_editor_error
 run_test "Long filenames support" test_long_filenames
 run_test "Many files stress test" test_many_files

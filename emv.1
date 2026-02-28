@@ -4,6 +4,7 @@ emv \- rename multiple files in a directory in bulk via editing a file listing i
 
 .SH SYNOPSIS
 .B emv
+.RB [ \-v " | " \-vv ]
 .RI [ directory ]
 
 .SH DESCRIPTION
@@ -30,6 +31,15 @@ Perform the rename operations to match your edited list
 
 .SH ABORTING CHANGES
 To cancel: quit without saving, or delete all lines and save (empty file does nothing).
+
+.SH OPTIONS
+.TP
+.B \-v
+Verbose mode. Print a summary of completed renames to stderr.
+.TP
+.B \-vv
+Extra verbose mode. Narrated walkthrough of each rename operation, including
+staging to temporary directory for complex renames.
 
 .SH ARGUMENTS
 .TP
