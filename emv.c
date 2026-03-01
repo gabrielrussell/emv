@@ -284,13 +284,13 @@ cleanup:
 
 char *analyze_renames(char **old_files, char **new_files, int count,
                       rename_entry **renames, int *rename_count, int *tricky) {
-  int *is_renamed = calloc(count, sizeof(int));
-  int *unchanged = calloc(count, sizeof(int));
+  int *old_file_is_renamed = calloc(count, sizeof(int));
+  int *old_file_is_unchanged = calloc(count, sizeof(int));
   int capacity = count;
   char *error_string = NULL;
 
   *renames = malloc(capacity * sizeof(rename_entry));
-  if (!is_renamed || !unchanged || !*renames) {
+  if (!old_file_is_renamed || !old_file_is_unchanged || !*renames) {
     error_string = "failed to allocate memory for rename analysis";
     goto cleanup;
   }
@@ -309,44 +309,42 @@ char *analyze_renames(char **old_files, char **new_files, int count,
       }
       (*rename_count)++;
 
-      is_renamed[i] = 1;
+      old_file_is_renamed[i] = 1;
     } else {
-      unchanged[i] = 1;
+      old_file_is_unchanged[i] = 1;
     }
   }
 
-  if (!error_string) {
-    // Check for slashes in destination names
-    for (int i = 0; i < *rename_count && !error_string; i++) {
-      if (strchr((*renames)[i].new_name, '/') != NULL) {
-        error_string = "renamed entry contains a '/' character";
+  // Check for slashes in destination names
+  for (int i = 0; i < *rename_count && !error_string; i++) {
+    if (strchr((*renames)[i].new_name, '/') != NULL) {
+      error_string = "renamed entry contains a '/' character";
+      goto cleanup;
+    }
+  }
+
+  // Check for duplicate destination names
+  for (int i = 0; i < *rename_count && !error_string; i++) {
+    for (int j = i + 1; j < *rename_count; j++) {
+      if (strcmp((*renames)[i].new_name, (*renames)[j].new_name) == 0) {
+        error_string = "multiple files would be renamed to the same name";
         goto cleanup;
       }
     }
+  }
 
-    // Check for duplicate destination names
-    for (int i = 0; i < *rename_count && !error_string; i++) {
-      for (int j = i + 1; j < *rename_count; j++) {
-        if (strcmp((*renames)[i].new_name, (*renames)[j].new_name) == 0) {
-          error_string = "multiple files would be renamed to the same name";
-          goto cleanup;
-        }
+  // Check for overwriting old_file_is_unchanged files and detect tricky renames
+  for (int i = 0; i < count && !error_string; i++) {
+    for (int j = 0; j < *rename_count && !error_string; j++) {
+      if (strcmp((*renames)[j].new_name, old_files[i]) == 0 &&
+          old_file_is_unchanged[i]) {
+        error_string = "rename would overwrite an existing unchanged file";
+        break;
       }
-    }
 
-    // Check for overwriting unchanged files and detect tricky renames
-    for (int i = 0; i < count && !error_string; i++) {
-      for (int j = 0; j < *rename_count && !error_string; j++) {
-        if (strcmp((*renames)[j].new_name, old_files[i]) == 0 &&
-            unchanged[i]) {
-          error_string = "rename would overwrite an existing unchanged file";
-          break;
-        }
-
-        if (strcmp((*renames)[j].new_name, old_files[i]) == 0 &&
-            is_renamed[i]) {
-          *tricky = 1;
-        }
+      if (strcmp((*renames)[j].new_name, old_files[i]) == 0 &&
+          old_file_is_renamed[i]) {
+        *tricky = 1;
       }
     }
   }
@@ -356,8 +354,8 @@ cleanup:
     free_rename_entries(*renames, *rename_count);
     *renames = NULL;
   }
-  free(is_renamed);
-  free(unchanged);
+  free(old_file_is_renamed);
+  free(old_file_is_unchanged);
   return error_string;
 }
 
