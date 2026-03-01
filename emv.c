@@ -2,15 +2,12 @@
 #include <dirent.h>
 #include <errno.h>
 #include <error.h>
-#include <libgen.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include <getopt.h>
 
 #define NAME "emv"
 
@@ -285,16 +282,15 @@ cleanup:
   return error_string;
 }
 
-char *analyze_renames(char *error_buffer __attribute__((unused)),
-                      char **old_files, char **new_files, int count,
+char *analyze_renames(char **old_files, char **new_files, int count,
                       rename_entry **renames, int *rename_count, int *tricky) {
-  int *orig_count = calloc(count, sizeof(int));
+  int *is_renamed = calloc(count, sizeof(int));
   int *unchanged = calloc(count, sizeof(int));
   int capacity = count;
   char *error_string = NULL;
 
   *renames = malloc(capacity * sizeof(rename_entry));
-  if (!orig_count || !unchanged || !*renames) {
+  if (!is_renamed || !unchanged || !*renames) {
     error_string = "failed to allocate memory for rename analysis";
     goto cleanup;
   }
@@ -313,7 +309,7 @@ char *analyze_renames(char *error_buffer __attribute__((unused)),
       }
       (*rename_count)++;
 
-      orig_count[i]++;
+      is_renamed[i] = 1;
     } else {
       unchanged[i] = 1;
     }
@@ -348,7 +344,7 @@ char *analyze_renames(char *error_buffer __attribute__((unused)),
         }
 
         if (strcmp((*renames)[j].new_name, old_files[i]) == 0 &&
-            orig_count[i]) {
+            is_renamed[i]) {
           *tricky = 1;
         }
       }
@@ -360,19 +356,18 @@ cleanup:
     free_rename_entries(*renames, *rename_count);
     *renames = NULL;
   }
-  free(orig_count);
+  free(is_renamed);
   free(unchanged);
   return error_string;
 }
 
-// failed_index < 0 means all renames succeeded (success report)
 // temp_dir is non-NULL for tricky renames, used to show actual file locations
 void print_rename_report(rename_entry *renames, int rename_count,
                          int failed_index, const char *fail_msg,
                          int phase, const char *temp_dir) {
   fprintf(stderr, "rename report:\n");
   for (int i = 0; i < rename_count; i++) {
-    if (failed_index < 0 || i < failed_index) {
+    if (i < failed_index) {
       if (phase == 1) {
         fprintf(stderr, "  staged:  file is at %s/%s  (intended: %s)\n",
                 temp_dir, renames[i].old_name, renames[i].new_name);
@@ -558,7 +553,7 @@ int main(int argc, char *argv[]) {
     goto cleanup;
   }
 
-  error_string = analyze_renames(error_buffer, old_files, new_files, old_count,
+  error_string = analyze_renames(old_files, new_files, old_count,
                                  &renames, &rename_count, &tricky);
   if (error_string) {
     goto cleanup;
