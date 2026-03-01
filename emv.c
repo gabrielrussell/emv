@@ -2,6 +2,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <error.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -450,7 +451,8 @@ char *perform_renames(char *error_buffer, rename_entry *renames,
       fprintf(stderr, "renaming %s -> %s\n", src, renames[i].new_name);
     }
 
-    if (rename(src, renames[i].new_name) != 0) {
+    if (renameat2(AT_FDCWD, src, AT_FDCWD, renames[i].new_name,
+                  RENAME_NOREPLACE) != 0) {
       print_rename_report(renames, rename_count, i, strerror(errno), 2,
                           tricky ? temp_dir : NULL);
       snprintf(error_buffer, ERROR_BUFFER_SIZE, "failed to rename %s to %s: %s",

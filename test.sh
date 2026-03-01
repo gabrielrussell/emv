@@ -500,6 +500,31 @@ EOF
     [[ -f "bbb" && "$(cat bbb)" == "content b" ]] || return 1
 }
 
+# Test: File created while editor is open doesn't get silently overwritten
+test_noreplace() {
+    echo "content a" > "aaa"
+    echo "content b" > "bbb"
+
+    # Mock editor renames aaa->ccc, but also creates ccc on disk.
+    # renameat2 RENAME_NOREPLACE should prevent the overwrite.
+    cat > .mock_editor.sh << 'EOF'
+#!/bin/bash
+sed 's/^aaa$/ccc/' "$1" > tmp && mv tmp "$1"
+echo "new content" > ccc
+EOF
+    chmod +x .mock_editor.sh
+
+    local stderr_output
+    stderr_output=$(EDITOR="./.mock_editor.sh" $VALGRIND_CMD ../emv 2>&1 1>/dev/null)
+    [[ $? -ne 0 ]] || return 1
+
+    # The pre-existing ccc should not have been overwritten
+    [[ -f "ccc" && "$(cat ccc)" == "new content" ]] || return 1
+
+    # aaa should still exist (rename failed)
+    [[ -f "aaa" && "$(cat aaa)" == "content a" ]] || return 1
+}
+
 # Main test execution
 echo -e "${YELLOW}EMV Test Suite${NC}"
 echo "================"
@@ -520,6 +545,7 @@ run_test "Directory argument" test_directory_argument
 run_test "Verbose flag output" test_verbose_output
 run_test "Extra verbose output (tricky)" test_extra_verbose_output
 run_test "Tricky rename staging failure" test_tricky_rename_staging_failure
+run_test "No-clobber rename (RENAME_NOREPLACE)" test_noreplace
 run_test "No EDITOR environment error" test_no_editor_error
 run_test "Long filenames support" test_long_filenames
 run_test "Many files stress test" test_many_files
