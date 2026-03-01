@@ -29,7 +29,10 @@ When run, **emv** will:
 
 4.  After you save and exit the editor, analyze the changes
 
-5.  Perform the rename operations to match your edited list
+5.  If there are any rename loops, move all to-be-renamed files to a
+    temp directory
+
+6.  Perform the rename operations to match your edited list
 
 # ABORTING CHANGES
 
@@ -72,23 +75,19 @@ does nothing).
 
 :   Rename files and directories in the /path/to/photos directory
 
-**EDITOR=nano emv**
-
-:   Use nano as the editor for this session
-
 # EDITING THE FILE LIST
 
 When your editor opens, you\'ll see a list of names, one per line:
 
-    photo001.jpg
-    photo002.jpg
-    vacation.txt
+    hawaiibeach.jpg
+    hawaiisunset.jpg
+    vacationnotes.txt
 
 You can edit this list to rename the objects:
 
-    hawaii_beach.jpg
-    hawaii_sunset.jpg
-    vacation_notes.txt
+    Hawaii Beach.jpg
+    Hawaii Sunset.jpg
+    Vacation Notes.txt
 
 When you save and exit, they will be renamed accordingly.
 
@@ -112,11 +111,6 @@ When you save and exit, they will be renamed accordingly.
 
 :   You cannot rename an entry to the name of an existing entry that you
     didn\'t also rename.
-
-**Complex renames are supported**
-
-:   Entry swapping (A→B, B→A) and circular renames are automatically
-    handled using temporary storage.
 
 # ERROR CONDITIONS
 
@@ -152,11 +146,17 @@ When you save and exit, they will be renamed accordingly.
 
 # NOTES
 
--   Works on files, directories, and symbolic links
+-   Silently ignores files starting with \'.\'
 
--   Ignores hidden entries (starting with \'.\')
+-   Silently ignores entries containing newline characters
 
--   Ignores entries with newline characters
+-   Editing the order of files is a footgun. Deleting the first line and
+    adding it to the end will give every file the name of the previous
+    file in the list.
+
+-   If you\'ve made edits and want to make sure that no renames happen,
+    you can just delete all of the lines in the file. An empty file will
+    always cause no renames to happen.
 
 # SEE ALSO
 
@@ -172,4 +172,6 @@ Gabriel Russell
 
 # COPYRIGHT
 
-This software is provided as-is without warranty.
+To the extent possible under law, the author has waived all copyright
+and related rights to this work. See the LICENSE file or
+https://creativecommons.org/publicdomain/zero/1.0/

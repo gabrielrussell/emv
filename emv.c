@@ -148,7 +148,7 @@ char *create_temp_file(char *error_buffer, char **files, int count,
 
 cleanup:
   if (fp) {
-    fclose(fp);
+    fclose(fp); // also closes fd
   } else if (fd != -1) {
     close(fd);
   }
@@ -377,7 +377,7 @@ void print_rename_report(rename_entry *renames, int rename_count,
       fprintf(stderr, "  FAILED:  %s -> %s: %s\n", renames[i].old_name,
               renames[i].new_name, fail_msg);
     } else {
-      if (temp_dir) {
+      if (temp_dir && phase == 2) {
         fprintf(stderr, "  pending: file is at %s/%s  (intended: %s)\n",
                 temp_dir, renames[i].old_name, renames[i].new_name);
       } else {

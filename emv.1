@@ -27,6 +27,8 @@ Open the file in your text editor ($EDITOR environment variable)
 .IP 4. 4
 After you save and exit the editor, analyze the changes
 .IP 5. 4
+If there are any rename loops, move all to-be-renamed files to a temp directory
+.IP 6. 4
 Perform the rename operations to match your edited list
 
 .SH ABORTING CHANGES
@@ -58,25 +60,22 @@ Rename files and directories in the current directory
 .TP
 .B emv /path/to/photos
 Rename files and directories in the /path/to/photos directory
-.TP
-.B EDITOR=nano emv
-Use nano as the editor for this session
 
 .SH EDITING THE FILE LIST
 When your editor opens, you'll see a list of names, one per line:
 .IP
 .nf
-photo001.jpg
-photo002.jpg
-vacation.txt
+hawaiibeach.jpg
+hawaiisunset.jpg
+vacationnotes.txt
 .fi
 .P
 You can edit this list to rename the objects:
 .IP
 .nf
-hawaii_beach.jpg
-hawaii_sunset.jpg
-vacation_notes.txt
+Hawaii Beach.jpg
+Hawaii Sunset.jpg
+Vacation Notes.txt
 .fi
 .P
 When you save and exit, they will be renamed accordingly.
@@ -94,9 +93,6 @@ Renamed entries cannot contain '/' characters. emv operates on a single director
 .TP
 .B No overwriting unchanged entries
 You cannot rename an entry to the name of an existing entry that you didn't also rename.
-.TP
-.B Complex renames are supported
-Entry swapping (A→B, B→A) and circular renames are automatically handled using temporary storage.
 
 .SH ERROR CONDITIONS
 .B emv
@@ -128,11 +124,13 @@ Temporary directory created when complex renames require intermediate storage
 
 .SH NOTES
 .IP \(bu 4
-Works on files, directories, and symbolic links
+Silently ignores files starting with '.'
 .IP \(bu 4
-Ignores hidden entries (starting with '.')
+Silently ignores entries containing newline characters
 .IP \(bu 4
-Ignores entries with newline characters
+Editing the order of files is a footgun. Deleting the first line and adding it to the end will give every file the name of the previous file in the list.
+.IP \(bu 4
+If you've made edits and want to make sure that no renames happen, you can just delete all of the lines in the file. An empty file will always cause no renames to happen.
 
 .SH SEE ALSO
 .BR mv (1),
@@ -147,4 +145,6 @@ Report bugs at: https://github.com/gabrielrussell/emv/issues
 Gabriel Russell
 
 .SH COPYRIGHT
-This software is provided as-is without warranty.
+To the extent possible under law, the author has waived all copyright
+and related rights to this work.
+See the LICENSE file or https://creativecommons.org/publicdomain/zero/1.0/

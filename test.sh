@@ -393,6 +393,113 @@ EOF
     [[ -f "$temp_dir/ccc" && "$(cat "$temp_dir/ccc")" == "content c" ]] || return 1
 }
 
+# Test: Editor exits with non-zero status
+test_editor_exit_failure() {
+    touch "file1.txt" "file2.txt"
+
+    cat > mock_editor.sh << 'EOF'
+#!/bin/bash
+exit 1
+EOF
+    chmod +x mock_editor.sh
+
+    ! run_cmd "EDITOR=\"./mock_editor.sh\" $VALGRIND_CMD ../emv" "Running emv expecting editor failure"
+}
+
+# Test: Bad command-line flag
+test_bad_flag() {
+    touch "file1.txt"
+
+    local stderr_output
+    stderr_output=$($VALGRIND_CMD ../emv -z 2>&1 1>/dev/null)
+    [[ $? -ne 0 ]] || return 1
+    echo "$stderr_output" | grep -q "usage:" || return 1
+}
+
+# Test: Directory argument
+test_directory_argument() {
+    mkdir subdir
+    echo "content a" > subdir/aaa
+    echo "content b" > subdir/bbb
+
+    # Editor path must be absolute since emv chdir's to subdir
+    cat > mock_editor.sh << 'EOF'
+#!/bin/bash
+sed 's/^aaa$/renamed_a/' "$1" > tmp && mv tmp "$1"
+EOF
+    chmod +x mock_editor.sh
+    local editor_path
+    editor_path=$(pwd)/mock_editor.sh
+
+    run_cmd "EDITOR=\"$editor_path\" $VALGRIND_CMD ../emv subdir" "Running emv with directory argument"
+
+    [[ -f "subdir/renamed_a" && ! -f "subdir/aaa" ]] || return 1
+    [[ "$(cat subdir/renamed_a)" == "content a" ]] || return 1
+    [[ "$(cat subdir/bbb)" == "content b" ]] || return 1
+}
+
+# Test: Verbose flag (-v) output
+test_verbose_output() {
+    echo "content a" > "aaa"
+    echo "content b" > "bbb"
+
+    cat > .mock_editor.sh << 'EOF'
+#!/bin/bash
+sed 's/^aaa$/ccc/' "$1" > tmp && mv tmp "$1"
+EOF
+    chmod +x .mock_editor.sh
+
+    local stderr_output
+    stderr_output=$(EDITOR="./.mock_editor.sh" $VALGRIND_CMD ../emv -v 2>&1 1>/dev/null)
+    [[ $? -eq 0 ]] || return 1
+    echo "$stderr_output" | grep -q "aaa -> ccc" || return 1
+}
+
+# Test: Extra verbose flag (-vv) output with tricky rename
+test_extra_verbose_output() {
+    echo "content a" > "aaa"
+    echo "content b" > "bbb"
+
+    cat > .mock_editor.sh << 'EOF'
+#!/bin/bash
+sed 's/^aaa$/__SWAP__/; s/^bbb$/aaa/; s/^__SWAP__$/bbb/' "$1" > tmp && mv tmp "$1"
+EOF
+    chmod +x .mock_editor.sh
+
+    local stderr_output
+    stderr_output=$(EDITOR="./.mock_editor.sh" $VALGRIND_CMD ../emv -vv 2>&1 1>/dev/null)
+    [[ $? -eq 0 ]] || return 1
+    echo "$stderr_output" | grep -q "creating temp directory" || return 1
+    echo "$stderr_output" | grep -q "staging" || return 1
+    echo "$stderr_output" | grep -q "renaming" || return 1
+    echo "$stderr_output" | grep -q "removing temp directory" || return 1
+    echo "$stderr_output" | grep -q "aaa -> bbb" || return 1
+}
+
+# Test: Tricky rename pass-1 (staging) failure
+test_tricky_rename_staging_failure() {
+    echo "content a" > "aaa"
+    echo "content b" > "bbb"
+
+    # Mock editor: swap aaa<->bbb, and delete aaa from the filesystem.
+    # emv tries to stage aaa first (alphabetical order) and gets ENOENT.
+    cat > .mock_editor.sh << 'EOF'
+#!/bin/bash
+sed 's/^aaa$/__SWAP__/; s/^bbb$/aaa/; s/^__SWAP__$/bbb/' "$1" > tmp && mv tmp "$1"
+rm aaa
+EOF
+    chmod +x .mock_editor.sh
+
+    local stderr_output
+    stderr_output=$(EDITOR="./.mock_editor.sh" $VALGRIND_CMD ../emv 2>&1 1>/dev/null)
+    [[ $? -ne 0 ]] || return 1
+    echo "$stderr_output" | grep -q "FAILED:" || return 1
+    echo "$stderr_output" | grep -q "rename report:" || return 1
+
+    # bbb should still be at its original location (not staged)
+    [[ -f "bbb" && "$(cat bbb)" == "content b" ]] || return 1
+}
+
 # Main test execution
 echo -e "${YELLOW}EMV Test Suite${NC}"
 echo "================"
@@ -407,6 +514,12 @@ run_test "Overwrite existing file error" test_overwrite_error
 run_test "Slash in destination name error" test_slash_in_name_error
 run_test "Partial rename failure report" test_partial_rename_report
 run_test "Tricky rename pass-2 failure" test_tricky_rename_failure
+run_test "Editor exits with failure" test_editor_exit_failure
+run_test "Bad command-line flag" test_bad_flag
+run_test "Directory argument" test_directory_argument
+run_test "Verbose flag output" test_verbose_output
+run_test "Extra verbose output (tricky)" test_extra_verbose_output
+run_test "Tricky rename staging failure" test_tricky_rename_staging_failure
 run_test "No EDITOR environment error" test_no_editor_error
 run_test "Long filenames support" test_long_filenames
 run_test "Many files stress test" test_many_files
